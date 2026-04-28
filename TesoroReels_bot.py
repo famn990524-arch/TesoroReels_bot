@@ -102,8 +102,9 @@ def load_data():
                 "name": "🇮🇹 Italia",
                 "posters": {
                     "gf": {"name": "GFR", "accounts": ["micaxwox", "wumiclxc", "milazhcx", "micaelawu7x", "zhangmilaa", "milaaazxo", "wuxmicx77", "wuxmicalex"]},
-                    "dianne": {"name": "DianneR", "accounts": ["elirasantara", "eliraasant", "laelirasant", "aauroraleonetti", "auroraaleonetti", "auroraleonetti_", "naomiiwang_", "milbloomx", "justmilix"]},
-                    "alberto": {"name": "Alberto", "accounts": ["bellaamorenox", "labelamoregram", "bellalaspagnolaa", "bellamorenooo__", "bellamorenoo_", "bellalaspagnola"]},
+                    "dianne": {"name": "DianneR", "accounts": ["elirasantara", "eliraasant", "laelirasant", "aauroraleonetti", "auroraaleonetti", "auroraleonetti_", "naomiiwang_", "milbloomx", "justmilix", "milenadamanti"]},
+                    "alberto": {"name": "Alberto", "accounts": ["bellaamorenox", "labelamoregram", "bellalaspagnolaa"]},
+                    "laura": {"name": "Laura", "accounts": ["bellamorenooo__", "bellamorenoo_", "bellalaspagnola"]},
                     "sara": {"name": "Sara", "accounts": ["isabellaaurent", "laura_laugram"]},
                     "thuany": {"name": "Thuany", "accounts": ["damantmilena", "sweet_milexo", "milenadaman", "walimxu", "wamilux"]},
                     "valentina": {"name": "Valentina", "accounts": ["lamorenobellaax", "bellasimoren", "morenabellaai", "lalauretaxx", "lalaauretta", "lauraeey_", "elirabellisima69", "elirasanreal", "elirabellisima", "muxilaw"]}
@@ -223,6 +224,14 @@ def delete_account(country_key: str, poster_key: str, account: str):
             reels_data[country_key]["posters"][poster_key]["accounts"].remove(account)
             save_posters_data()
             if account in reels_files:
+                # Eliminar archivos físicos
+                for reel_id, meta in reels_files[account]["metadata"].items():
+                    path = meta.get("path")
+                    if path and os.path.exists(path):
+                        try:
+                            os.unlink(path)
+                        except:
+                            pass
                 del reels_files[account]
                 save_reels_data()
             return True
@@ -355,7 +364,7 @@ async def handle_poster_name(update: Update, context: ContextTypes.DEFAULT_TYPE)
             f"❌ Poster '{poster_name}' not found.\n\n"
             f"Please check the name and try again.\n"
             f"Use <code>/menu</code> to try again.\n\n"
-            f"📋 Available posters: CamilaG, Giselle, Anna, Maya, Ismerda, Javiera, Oluwatoyosi, Truong, Sarah, Victor, DianneR, Alberto, Sara, Thuany, Valentina, GFR",
+            f"📋 Available posters: CamilaG, Giselle, Anna, Maya, Ismerda, Javiera, Oluwatoyosi, Truong, Sarah, Victor, DianneR, Alberto, Laura, Sara, Thuany, Valentina, GFR",
             parse_mode="HTML"
         )
         return
@@ -398,17 +407,19 @@ async def show_accounts_menu(update: Update, context: ContextTypes.DEFAULT_TYPE,
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    if isinstance(update, Update) and update.callback_query:
+    if update.callback_query:
         await update.callback_query.edit_message_text(
             f"🎬 <b>Select an account for {poster_data['name']} in {reels_data[country_key]['name']}:</b>\n\n"
-            f"🟢 = Reels available | 🔴 = No reels available",
+            f"🟢 = Reels available | 🔴 = No reels available\n\n"
+            f"Use /menu to go back to the main menu.",
             reply_markup=reply_markup,
             parse_mode="HTML"
         )
     else:
         await update.message.reply_text(
             f"🎬 <b>Select an account for {poster_data['name']} in {reels_data[country_key]['name']}:</b>\n\n"
-            f"🟢 = Reels available | 🔴 = No reels available",
+            f"🟢 = Reels available | 🔴 = No reels available\n\n"
+            f"Use /menu to go back to the main menu.",
             reply_markup=reply_markup,
             parse_mode="HTML"
         )
@@ -497,10 +508,7 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
         "👑 <b>Admin Menu</b>\n\n"
-        "Select an option:\n"
-        "• Upload Reels - Add new content\n"
-        "• Recibir reels - Watch reels as a regular user\n"
-        "• Use /menu separately to receive reels",
+        "Select an option:",
         reply_markup=reply_markup, 
         parse_mode="HTML"
     )
@@ -511,7 +519,7 @@ async def admin_upload_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = [[InlineKeyboardButton(country_data["name"], callback_data=f"admin_upload_country_{country_key}")] 
                 for country_key, country_data in reels_data.items()]
-    keyboard.append([InlineKeyboardButton("◀️ Back", callback_data="admin_back")])
+    keyboard.append([InlineKeyboardButton("◀️ Back to Admin Menu", callback_data="admin_back")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text("🌍 <b>Select country to upload reels:</b>", reply_markup=reply_markup, parse_mode="HTML")
@@ -628,7 +636,7 @@ async def admin_add_poster(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = [[InlineKeyboardButton(country_data["name"], callback_data=f"add_poster_country_{country_key}")] 
                 for country_key, country_data in reels_data.items()]
-    keyboard.append([InlineKeyboardButton("◀️ Back", callback_data="admin_back")])
+    keyboard.append([InlineKeyboardButton("◀️ Back to Admin Menu", callback_data="admin_back")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text("➕ <b>Add New Poster</b>\n\nSelect the country for the new poster:", reply_markup=reply_markup, parse_mode="HTML")
@@ -647,7 +655,7 @@ async def admin_add_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = [[InlineKeyboardButton(country_data["name"], callback_data=f"add_account_country_{country_key}")] 
                 for country_key, country_data in reels_data.items()]
-    keyboard.append([InlineKeyboardButton("◀️ Back", callback_data="admin_back")])
+    keyboard.append([InlineKeyboardButton("◀️ Back to Admin Menu", callback_data="admin_back")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text("➕ <b>Add New Account</b>\n\nSelect the country:", reply_markup=reply_markup, parse_mode="HTML")
@@ -693,7 +701,7 @@ async def admin_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 used, available, total = get_stato_account(account)
                 status_text += f"    • @{account}: {used}/{total} used, {available} available\n"
     
-    keyboard = [[InlineKeyboardButton("◀️ Back", callback_data="admin_back")]]
+    keyboard = [[InlineKeyboardButton("◀️ Back to Admin Menu", callback_data="admin_back")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     if len(status_text) > 4000:
@@ -712,7 +720,7 @@ async def admin_reset_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 used, available, total = get_stato_account(account)
                 keyboard.append([InlineKeyboardButton(f"{account} ({used}/{total} used)", callback_data=f"admin_reset_account_{account}")])
     
-    keyboard.append([InlineKeyboardButton("◀️ Back", callback_data="admin_back")])
+    keyboard.append([InlineKeyboardButton("◀️ Back to Admin Menu", callback_data="admin_back")])
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text("🔄 <b>Reset Account Reels</b>\n\nSelect an account to reset all its reels:\n⚠️ <b>WARNING:</b> This will delete all reels and free up space.", reply_markup=reply_markup, parse_mode="HTML")
 
@@ -753,7 +761,7 @@ async def admin_delete_account_menu(update: Update, context: ContextTypes.DEFAUL
                 keyboard.append([InlineKeyboardButton(f"{account} ({country_data['name']} - {poster_data['name']})", 
                                                       callback_data=f"delete_account_{country_key}_{poster_key}_{account}")])
     
-    keyboard.append([InlineKeyboardButton("◀️ Back", callback_data="admin_back")])
+    keyboard.append([InlineKeyboardButton("◀️ Back to Admin Menu", callback_data="admin_back")])
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text("🗑️ <b>Delete Account</b>\n\nSelect an account to delete:", reply_markup=reply_markup, parse_mode="HTML")
 
@@ -788,7 +796,7 @@ async def admin_delete_poster_menu(update: Update, context: ContextTypes.DEFAULT
             keyboard.append([InlineKeyboardButton(f"{poster_data['name']} ({country_data['name']})", 
                                                   callback_data=f"delete_poster_{country_key}_{poster_key}")])
     
-    keyboard.append([InlineKeyboardButton("◀️ Back", callback_data="admin_back")])
+    keyboard.append([InlineKeyboardButton("◀️ Back to Admin Menu", callback_data="admin_back")])
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text("🗑️ <b>Delete Poster</b>\n\nSelect a poster to delete (all accounts will be deleted):", reply_markup=reply_markup, parse_mode="HTML")
 
@@ -934,6 +942,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_posters[str(user_id)]["country_key"], 
                 user_posters[str(user_id)]["poster_key"]
             )
+        else:
+            await query.edit_message_text("❌ No poster found. Use /menu to start over.")
     elif data == "change_poster":
         user_id = query.from_user.id
         if str(user_id) in user_posters:
