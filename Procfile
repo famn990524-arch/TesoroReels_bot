@@ -1,1 +1,1 @@
-echo "worker: python TesoroReels_bot.py" > Procfile
+worker: python TesoroReels_bot.py
