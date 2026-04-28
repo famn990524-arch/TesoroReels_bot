@@ -1,0 +1,2 @@
+# Crea un archivo llamado requirements.txt y pon esta línea dentro
+python-telegram-bot==20.7
