@@ -18,32 +18,24 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("❌ No se encontró la variable de entorno BOT_TOKEN. Configúrala en Railway.")
 
-ADMIN_USERS = [7097140504, 6094647471, 5363312268]  # @famn25, @ccgonzalezb13, @Drose1493
+ADMIN_USERS = [7097140504, 6094647471, 5363312268]
 ADMIN_USERNAMES = {7097140504: "famn25", 6094647471: "ccgonzalezb13", 5363312268: "Drose1493"}
 
-# Carpeta de datos
 DATA_FOLDER = "reels_bot_data"
 REELS_FOLDER = os.path.join(DATA_FOLDER, "reels")
 REELS_DB_FILE = os.path.join(DATA_FOLDER, "reels_db.json")
 POSTERS_DB_FILE = os.path.join(DATA_FOLDER, "posters_db.json")
 USERS_DB_FILE = os.path.join(DATA_FOLDER, "users_db.json")
 
-# Constantes
 THRESHOLD_REELS = 3
 
-# Estados
 waiting_for_reel_upload = {}
 waiting_for_poster_input = {}
 waiting_for_account_input = {}
 waiting_for_country_input = {}
-waiting_for_poster_name = {}
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# ======================
-# ESTRUCTURA DE DATOS
-# ======================
 
 reels_data = {}
 reels_files = {}
@@ -146,7 +138,6 @@ def save_users_data():
         json.dump({"posters": user_posters}, f, ensure_ascii=False, indent=2)
 
 def get_poster_countries(poster_name: str):
-    """Obtiene todos los países donde aparece un poster"""
     countries = []
     for country_key, country_data in reels_data.items():
         for poster_key, poster_data in country_data["posters"].items():
@@ -218,13 +209,11 @@ def reset_reels_per_account(account: str):
     save_reels_data()
 
 def delete_account(country_key: str, poster_key: str, account: str):
-    """Elimina una cuenta específica"""
     if country_key in reels_data and poster_key in reels_data[country_key]["posters"]:
         if account in reels_data[country_key]["posters"][poster_key]["accounts"]:
             reels_data[country_key]["posters"][poster_key]["accounts"].remove(account)
             save_posters_data()
             if account in reels_files:
-                # Eliminar archivos físicos
                 for reel_id, meta in reels_files[account]["metadata"].items():
                     path = meta.get("path")
                     if path and os.path.exists(path):
@@ -238,7 +227,6 @@ def delete_account(country_key: str, poster_key: str, account: str):
     return False
 
 def delete_poster(country_key: str, poster_key: str):
-    """Elimina un poster completo"""
     if country_key in reels_data and poster_key in reels_data[country_key]["posters"]:
         for account in reels_data[country_key]["posters"][poster_key]["accounts"]:
             if account in reels_files:
@@ -318,12 +306,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Type your poster name (e.g., <code>CamilaG</code>, <code>DianneR</code>, <code>GFR</code>)\n\n"
         f"💡 <b>Commands:</b>\n"
         f"• <code>/menu</code> - Start receiving reels\n"
+        f"• <code>/admin</code> - Admin panel\n"
         f"• <code>/start</code> - This message",
         parse_mode="HTML"
     )
 
 async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Inicia el proceso pidiendo el nombre del poster (también para admins)"""
     user_id = update.effective_user.id
     
     if str(user_id) in user_posters:
@@ -332,7 +320,7 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("🆕 Cambiar de poster", callback_data="change_poster")]
         ]
         if user_id in ADMIN_USERS:
-            keyboard.append([InlineKeyboardButton("👑 Ir a Admin", callback_data="admin_panel")])
+            keyboard.append([InlineKeyboardButton("👑 Ir a Admin", callback_data="go_to_admin")])
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -353,7 +341,6 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["waiting_for_poster"] = True
 
 async def handle_poster_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Maneja el nombre del poster ingresado por el usuario"""
     user_id = update.effective_user.id
     poster_name = update.message.text.strip()
     
@@ -395,7 +382,6 @@ async def handle_poster_name(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
 
 async def show_accounts_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, country_key: str, poster_key: str):
-    """Muestra las cuentas disponibles para el poster"""
     poster_data = reels_data.get(country_key, {}).get("posters", {}).get(poster_key, {})
     accounts = poster_data.get("accounts", [])
     
@@ -425,7 +411,6 @@ async def show_accounts_menu(update: Update, context: ContextTypes.DEFAULT_TYPE,
         )
 
 async def send_reel_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE, account: str):
-    """Envía un reel al usuario"""
     query = update.callback_query
     user = update.effective_user
     user_id = user.id
@@ -483,11 +468,10 @@ async def send_reel_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await query.edit_message_text("❌ Reel file not found. Please try again.")
 
 # ======================
-# MENU ADMIN
+# ADMIN MENU PRINCIPAL
 # ======================
 
 async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Muestra el menú de administrador"""
     user_id = update.effective_user.id
     
     if user_id not in ADMIN_USERS:
@@ -499,25 +483,36 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("➕ Add New Poster", callback_data="admin_add_poster")],
         [InlineKeyboardButton("➕ Add New Account", callback_data="admin_add_account")],
         [InlineKeyboardButton("🌍 Add New Country", callback_data="admin_add_country")],
-        [InlineKeyboardButton("🗑️ Delete Account", callback_data="admin_delete_account")],
-        [InlineKeyboardButton("🗑️ Delete Poster", callback_data="admin_delete_poster")],
+        [InlineKeyboardButton("🗑️ Delete Account", callback_data="admin_delete_account_start")],
+        [InlineKeyboardButton("🗑️ Delete Poster", callback_data="admin_delete_poster_start")],
         [InlineKeyboardButton("📊 Account Status", callback_data="admin_status")],
         [InlineKeyboardButton("🔄 Reset Account", callback_data="admin_reset")],
         [InlineKeyboardButton("🎬 Recibir reels (como usuario)", callback_data="use_as_user")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        "👑 <b>Admin Menu</b>\n\n"
-        "Select an option:",
-        reply_markup=reply_markup, 
-        parse_mode="HTML"
-    )
+    
+    if update.callback_query:
+        await update.callback_query.edit_message_text(
+            "👑 <b>Admin Menu</b>\n\nSelect an option:",
+            reply_markup=reply_markup, 
+            parse_mode="HTML"
+        )
+    else:
+        await update.message.reply_text(
+            "👑 <b>Admin Menu</b>\n\nSelect an option:",
+            reply_markup=reply_markup, 
+            parse_mode="HTML"
+        )
+
+# ======================
+# ADMIN - UPLOAD REELS
+# ======================
 
 async def admin_upload_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    keyboard = [[InlineKeyboardButton(country_data["name"], callback_data=f"admin_upload_country_{country_key}")] 
+    keyboard = [[InlineKeyboardButton(country_data["name"], callback_data=f"upload_country_{country_key}")] 
                 for country_key, country_data in reels_data.items()]
     keyboard.append([InlineKeyboardButton("◀️ Back to Admin Menu", callback_data="admin_back")])
     
@@ -529,7 +524,7 @@ async def admin_upload_poster_menu(update: Update, context: ContextTypes.DEFAULT
     await query.answer()
     
     posters = reels_data.get(country_key, {}).get("posters", {})
-    keyboard = [[InlineKeyboardButton(poster_data["name"], callback_data=f"admin_upload_poster_{country_key}_{poster_key}")] 
+    keyboard = [[InlineKeyboardButton(poster_data["name"], callback_data=f"upload_poster_{country_key}_{poster_key}")] 
                 for poster_key, poster_data in posters.items()]
     keyboard.append([InlineKeyboardButton("◀️ Back", callback_data="admin_upload")])
     
@@ -542,8 +537,8 @@ async def admin_upload_account_menu(update: Update, context: ContextTypes.DEFAUL
     await query.answer()
     
     accounts = reels_data.get(country_key, {}).get("posters", {}).get(poster_key, {}).get("accounts", [])
-    keyboard = [[InlineKeyboardButton(account, callback_data=f"admin_upload_account_{country_key}_{poster_key}_{account}")] for account in accounts]
-    keyboard.append([InlineKeyboardButton("◀️ Back", callback_data=f"admin_upload_poster_{country_key}_{poster_key}")])
+    keyboard = [[InlineKeyboardButton(account, callback_data=f"upload_account_{country_key}_{poster_key}_{account}")] for account in accounts]
+    keyboard.append([InlineKeyboardButton("◀️ Back", callback_data=f"upload_back_{country_key}_{poster_key}")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(f"🎬 <b>Select account for {reels_data[country_key]['posters'][poster_key]['name']}:</b>", 
@@ -557,77 +552,140 @@ async def admin_start_upload(update: Update, context: ContextTypes.DEFAULT_TYPE,
     waiting_for_reel_upload[user_id] = {"account": account, "files": []}
     await query.edit_message_text(f"🎬 <b>Uploading reels for @{account}</b>\n\nSend video files (.mp4, .mov) one or more at a time.\nWhen done, type <code>/done</code>\n\n⏳ Files received so far: 0", parse_mode="HTML")
 
-async def receive_reel_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    
-    if user_id not in ADMIN_USERS or user_id not in waiting_for_reel_upload:
-        return
-    
-    account = waiting_for_reel_upload[user_id]["account"]
-    temp_path = None
-    
-    if update.message.video:
-        video = update.message.video
-        file = await context.bot.get_file(video.file_id)
-        ext = ".mp4" if not video.file_name else os.path.splitext(video.file_name)[1]
-        temp_path = f"reel_temp_{int(time.time())}_{random.randint(1000,9999)}{ext}"
-        await file.download_to_drive(temp_path)
-    
-    elif update.message.document:
-        doc = update.message.document
-        file_ext = os.path.splitext(doc.file_name or "")[1].lower()
-        if file_ext in ['.mov', '.mp4', '.avi', '.mkv']:
-            file = await context.bot.get_file(doc.file_id)
-            temp_path = f"reel_temp_{int(time.time())}_{random.randint(1000,9999)}{file_ext}"
-            await file.download_to_drive(temp_path)
-        else:
-            await update.message.reply_text(f"❌ Unsupported file type: {file_ext}\nPlease send .mp4 or .mov files.")
-            return
-    
-    if temp_path:
-        waiting_for_reel_upload[user_id]["files"].append(temp_path)
-        total = len(waiting_for_reel_upload[user_id]["files"])
-        await update.message.reply_text(f"📦 Received 1 reel for @{account}\n📊 Total so far: {total}\n\nSend more or type <code>/done</code>", parse_mode="HTML")
+# ======================
+# ADMIN - DELETE ACCOUNT (CON PAÍSES Y POSTERS)
+# ======================
 
-async def done_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
+async def admin_delete_account_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Paso 1: Seleccionar país para eliminar cuenta"""
+    query = update.callback_query
+    await query.answer()
     
-    if user_id not in ADMIN_USERS or user_id not in waiting_for_reel_upload:
-        await update.message.reply_text("❌ No active upload session.")
-        return
+    keyboard = [[InlineKeyboardButton(country_data["name"], callback_data=f"del_acc_country_{country_key}")] 
+                for country_key, country_data in reels_data.items()]
+    keyboard.append([InlineKeyboardButton("◀️ Back to Admin Menu", callback_data="admin_back")])
     
-    account = waiting_for_reel_upload[user_id]["account"]
-    files = waiting_for_reel_upload[user_id]["files"]
-    total_files = len(files)
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text("🌍 <b>Delete Account - Select Country:</b>\n\nChoose the country of the account you want to delete:", 
+                                  reply_markup=reply_markup, parse_mode="HTML")
+
+async def admin_delete_account_poster(update: Update, context: ContextTypes.DEFAULT_TYPE, country_key: str):
+    """Paso 2: Seleccionar poster para eliminar cuenta"""
+    query = update.callback_query
+    await query.answer()
     
-    if total_files == 0:
-        await update.message.reply_text("❌ No files to process.")
-        return
+    posters = reels_data.get(country_key, {}).get("posters", {})
+    keyboard = [[InlineKeyboardButton(poster_data["name"], callback_data=f"del_acc_poster_{country_key}_{poster_key}")] 
+                for poster_key, poster_data in posters.items()]
+    keyboard.append([InlineKeyboardButton("◀️ Back", callback_data="admin_delete_account_start")])
     
-    status_msg = await update.message.reply_text(f"📥 Processing {total_files} reels for @{account}...")
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(f"📸 <b>Delete Account - Select Poster in {reels_data[country_key]['name']}:</b>\n\nChoose the poster:", 
+                                  reply_markup=reply_markup, parse_mode="HTML")
+
+async def admin_delete_account_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE, country_key: str, poster_key: str):
+    """Paso 3: Seleccionar cuenta específica para eliminar"""
+    query = update.callback_query
+    await query.answer()
     
-    success_count = 0
-    for path in files:
-        try:
-            aggiungere_reel_per_account(account, path)
-            success_count += 1
-        except Exception as e:
-            logger.error(f"Error processing reel {path}: {e}")
-        finally:
-            if os.path.exists(path):
-                try:
-                    os.unlink(path)
-                except:
-                    pass
+    accounts = reels_data.get(country_key, {}).get("posters", {}).get(poster_key, {}).get("accounts", [])
+    keyboard = []
+    for account in accounts:
+        used, available, total = get_stato_account(account)
+        keyboard.append([InlineKeyboardButton(f"{account} ({used}/{total} used)", callback_data=f"del_acc_confirm_{country_key}_{poster_key}_{account}")])
+    keyboard.append([InlineKeyboardButton("◀️ Back", callback_data=f"del_acc_back_poster_{country_key}")])
     
-    del waiting_for_reel_upload[user_id]
-    used, available, total = get_stato_account(account)
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(f"🗑️ <b>Delete Account - Select Account</b>\n\nCountry: {reels_data[country_key]['name']}\nPoster: {reels_data[country_key]['posters'][poster_key]['name']}\n\nSelect the account to delete:", 
+                                  reply_markup=reply_markup, parse_mode="HTML")
+
+async def admin_delete_account_execute(update: Update, context: ContextTypes.DEFAULT_TYPE, country_key: str, poster_key: str, account: str):
+    """Paso 4: Confirmar y eliminar la cuenta"""
+    query = update.callback_query
+    await query.answer()
     
-    await status_msg.edit_text(f"✅ <b>Reels loaded successfully for @{account}!</b>\n\n🎬 Added: {success_count}/{total_files}\n📊 Total in pool: {total}\n⏳ Available: {available}\n✅ Used: {used}", parse_mode="HTML")
-    await notificare_admin(context, f"🎬 You loaded {success_count} reels for @{account}", is_admin_action=True)
+    keyboard = [
+        [InlineKeyboardButton("✅ YES, Delete", callback_data=f"del_acc_final_{country_key}_{poster_key}_{account}")],
+        [InlineKeyboardButton("❌ Cancel", callback_data="admin_delete_account_start")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(f"⚠️ <b>Confirm Delete Account</b>\n\nAccount: @{account}\nCountry: {reels_data[country_key]['name']}\nPoster: {reels_data[country_key]['posters'][poster_key]['name']}\n\n<b>All reels for this account will be deleted!</b>\n\nAre you sure?", 
+                                  reply_markup=reply_markup, parse_mode="HTML")
+
+async def admin_delete_account_final(update: Update, context: ContextTypes.DEFAULT_TYPE, country_key: str, poster_key: str, account: str):
+    """Ejecutar eliminación de la cuenta"""
+    query = update.callback_query
+    await query.answer()
+    
+    if delete_account(country_key, poster_key, account):
+        await query.edit_message_text(f"✅ <b>Account @{account} has been deleted!</b>\n\nAll reels and data for this account have been removed.", parse_mode="HTML")
+        await notificare_admin(context, f"🗑️ Admin deleted account @{account}", is_admin_action=True)
+    else:
+        await query.edit_message_text(f"❌ Error deleting account @{account}.", parse_mode="HTML")
 
 # ======================
-# ADMIN - GESTIÓN DE AGREGAR
+# ADMIN - DELETE POSTER
+# ======================
+
+async def admin_delete_poster_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Paso 1: Seleccionar país para eliminar poster"""
+    query = update.callback_query
+    await query.answer()
+    
+    keyboard = [[InlineKeyboardButton(country_data["name"], callback_data=f"del_post_country_{country_key}")] 
+                for country_key, country_data in reels_data.items()]
+    keyboard.append([InlineKeyboardButton("◀️ Back to Admin Menu", callback_data="admin_back")])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text("🌍 <b>Delete Poster - Select Country:</b>\n\nChoose the country of the poster you want to delete:", 
+                                  reply_markup=reply_markup, parse_mode="HTML")
+
+async def admin_delete_poster_select(update: Update, context: ContextTypes.DEFAULT_TYPE, country_key: str):
+    """Paso 2: Seleccionar poster para eliminar"""
+    query = update.callback_query
+    await query.answer()
+    
+    posters = reels_data.get(country_key, {}).get("posters", {})
+    keyboard = []
+    for poster_key, poster_data in posters.items():
+        accounts_count = len(poster_data["accounts"])
+        keyboard.append([InlineKeyboardButton(f"{poster_data['name']} ({accounts_count} accounts)", callback_data=f"del_post_confirm_{country_key}_{poster_key}")])
+    keyboard.append([InlineKeyboardButton("◀️ Back", callback_data="admin_delete_poster_start")])
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(f"🗑️ <b>Delete Poster - Select Poster in {reels_data[country_key]['name']}:</b>\n\n⚠️ Warning: This will delete ALL accounts under this poster!", 
+                                  reply_markup=reply_markup, parse_mode="HTML")
+
+async def admin_delete_poster_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE, country_key: str, poster_key: str):
+    """Paso 3: Confirmar eliminación del poster"""
+    query = update.callback_query
+    await query.answer()
+    
+    poster_name = reels_data[country_key]["posters"][poster_key]["name"]
+    accounts_count = len(reels_data[country_key]["posters"][poster_key]["accounts"])
+    
+    keyboard = [
+        [InlineKeyboardButton("✅ YES, Delete", callback_data=f"del_post_final_{country_key}_{poster_key}")],
+        [InlineKeyboardButton("❌ Cancel", callback_data="admin_delete_poster_start")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(f"⚠️ <b>Confirm Delete Poster</b>\n\nPoster: {poster_name}\nCountry: {reels_data[country_key]['name']}\nAccounts: {accounts_count}\n\n<b>All accounts and reels will be deleted!</b>\n\nAre you sure?", 
+                                  reply_markup=reply_markup, parse_mode="HTML")
+
+async def admin_delete_poster_final(update: Update, context: ContextTypes.DEFAULT_TYPE, country_key: str, poster_key: str):
+    """Ejecutar eliminación del poster"""
+    query = update.callback_query
+    await query.answer()
+    
+    poster_name = reels_data[country_key]["posters"][poster_key]["name"]
+    if delete_poster(country_key, poster_key):
+        await query.edit_message_text(f"✅ <b>Poster '{poster_name}' has been deleted!</b>\n\nAll accounts and reels for this poster have been removed.", parse_mode="HTML")
+        await notificare_admin(context, f"🗑️ Admin deleted poster '{poster_name}'", is_admin_action=True)
+    else:
+        await query.edit_message_text(f"❌ Error deleting poster '{poster_name}'.", parse_mode="HTML")
+
+# ======================
+# ADMIN - OTRAS FUNCIONES
 # ======================
 
 async def admin_add_poster(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -747,85 +805,6 @@ async def admin_confirm_reset(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.edit_message_text(f"✅ <b>Account @{account} has been reset!</b>\n\nAll reels have been deleted.\nYou can now upload new reels.", parse_mode="HTML")
 
 # ======================
-# ADMIN - GESTIÓN DE ELIMINACIÓN
-# ======================
-
-async def admin_delete_account_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    keyboard = []
-    for country_key, country_data in reels_data.items():
-        for poster_key, poster_data in country_data["posters"].items():
-            for account in poster_data["accounts"]:
-                keyboard.append([InlineKeyboardButton(f"{account} ({country_data['name']} - {poster_data['name']})", 
-                                                      callback_data=f"delete_account_{country_key}_{poster_key}_{account}")])
-    
-    keyboard.append([InlineKeyboardButton("◀️ Back to Admin Menu", callback_data="admin_back")])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text("🗑️ <b>Delete Account</b>\n\nSelect an account to delete:", reply_markup=reply_markup, parse_mode="HTML")
-
-async def admin_confirm_delete_account(update: Update, context: ContextTypes.DEFAULT_TYPE, country_key: str, poster_key: str, account: str):
-    query = update.callback_query
-    await query.answer()
-    
-    keyboard = [
-        [InlineKeyboardButton("✅ YES, Delete", callback_data=f"confirm_delete_account_{country_key}_{poster_key}_{account}")],
-        [InlineKeyboardButton("❌ NO, Cancel", callback_data="admin_delete_account")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(f"⚠️ <b>Confirm Delete Account</b>\n\nAccount: @{account}\nCountry: {reels_data[country_key]['name']}\nPoster: {reels_data[country_key]['posters'][poster_key]['name']}\n\n<b>All reels for this account will be deleted!</b>\n\nAre you sure?", reply_markup=reply_markup, parse_mode="HTML")
-
-async def admin_execute_delete_account(update: Update, context: ContextTypes.DEFAULT_TYPE, country_key: str, poster_key: str, account: str):
-    query = update.callback_query
-    await query.answer()
-    
-    if delete_account(country_key, poster_key, account):
-        await query.edit_message_text(f"✅ <b>Account @{account} has been deleted!</b>\n\nAll reels and data for this account have been removed.", parse_mode="HTML")
-        await notificare_admin(context, f"🗑️ Admin deleted account @{account}", is_admin_action=True)
-    else:
-        await query.edit_message_text(f"❌ Error deleting account @{account}.", parse_mode="HTML")
-
-async def admin_delete_poster_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    
-    keyboard = []
-    for country_key, country_data in reels_data.items():
-        for poster_key, poster_data in country_data["posters"].items():
-            keyboard.append([InlineKeyboardButton(f"{poster_data['name']} ({country_data['name']})", 
-                                                  callback_data=f"delete_poster_{country_key}_{poster_key}")])
-    
-    keyboard.append([InlineKeyboardButton("◀️ Back to Admin Menu", callback_data="admin_back")])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text("🗑️ <b>Delete Poster</b>\n\nSelect a poster to delete (all accounts will be deleted):", reply_markup=reply_markup, parse_mode="HTML")
-
-async def admin_confirm_delete_poster(update: Update, context: ContextTypes.DEFAULT_TYPE, country_key: str, poster_key: str):
-    query = update.callback_query
-    await query.answer()
-    
-    poster_name = reels_data[country_key]["posters"][poster_key]["name"]
-    accounts_count = len(reels_data[country_key]["posters"][poster_key]["accounts"])
-    
-    keyboard = [
-        [InlineKeyboardButton("✅ YES, Delete", callback_data=f"confirm_delete_poster_{country_key}_{poster_key}")],
-        [InlineKeyboardButton("❌ NO, Cancel", callback_data="admin_delete_poster")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(f"⚠️ <b>Confirm Delete Poster</b>\n\nPoster: {poster_name}\nCountry: {reels_data[country_key]['name']}\nAccounts: {accounts_count}\n\n<b>All accounts and reels will be deleted!</b>\n\nAre you sure?", reply_markup=reply_markup, parse_mode="HTML")
-
-async def admin_execute_delete_poster(update: Update, context: ContextTypes.DEFAULT_TYPE, country_key: str, poster_key: str):
-    query = update.callback_query
-    await query.answer()
-    
-    poster_name = reels_data[country_key]["posters"][poster_key]["name"]
-    if delete_poster(country_key, poster_key):
-        await query.edit_message_text(f"✅ <b>Poster '{poster_name}' has been deleted!</b>\n\nAll accounts and reels for this poster have been removed.", parse_mode="HTML")
-        await notificare_admin(context, f"🗑️ Admin deleted poster '{poster_name}'", is_admin_action=True)
-    else:
-        await query.edit_message_text(f"❌ Error deleting poster '{poster_name}'.", parse_mode="HTML")
-
-# ======================
 # HANDLER DE TEXTO PARA ADMIN
 # ======================
 
@@ -900,42 +879,102 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
 # ======================
-# CALLBACK HANDLER PRINCIPAL
+# RECEIVE REEL UPLOAD
+# ======================
+
+async def receive_reel_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
+    if user_id not in ADMIN_USERS or user_id not in waiting_for_reel_upload:
+        return
+    
+    account = waiting_for_reel_upload[user_id]["account"]
+    temp_path = None
+    
+    if update.message.video:
+        video = update.message.video
+        file = await context.bot.get_file(video.file_id)
+        ext = ".mp4" if not video.file_name else os.path.splitext(video.file_name)[1]
+        temp_path = f"reel_temp_{int(time.time())}_{random.randint(1000,9999)}{ext}"
+        await file.download_to_drive(temp_path)
+    
+    elif update.message.document:
+        doc = update.message.document
+        file_ext = os.path.splitext(doc.file_name or "")[1].lower()
+        if file_ext in ['.mov', '.mp4', '.avi', '.mkv']:
+            file = await context.bot.get_file(doc.file_id)
+            temp_path = f"reel_temp_{int(time.time())}_{random.randint(1000,9999)}{file_ext}"
+            await file.download_to_drive(temp_path)
+        else:
+            await update.message.reply_text(f"❌ Unsupported file type: {file_ext}\nPlease send .mp4 or .mov files.")
+            return
+    
+    if temp_path:
+        waiting_for_reel_upload[user_id]["files"].append(temp_path)
+        total = len(waiting_for_reel_upload[user_id]["files"])
+        await update.message.reply_text(f"📦 Received 1 reel for @{account}\n📊 Total so far: {total}\n\nSend more or type <code>/done</code>", parse_mode="HTML")
+
+async def done_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
+    if user_id not in ADMIN_USERS or user_id not in waiting_for_reel_upload:
+        await update.message.reply_text("❌ No active upload session.")
+        return
+    
+    account = waiting_for_reel_upload[user_id]["account"]
+    files = waiting_for_reel_upload[user_id]["files"]
+    total_files = len(files)
+    
+    if total_files == 0:
+        await update.message.reply_text("❌ No files to process.")
+        return
+    
+    status_msg = await update.message.reply_text(f"📥 Processing {total_files} reels for @{account}...")
+    
+    success_count = 0
+    for path in files:
+        try:
+            aggiungere_reel_per_account(account, path)
+            success_count += 1
+        except Exception as e:
+            logger.error(f"Error processing reel {path}: {e}")
+        finally:
+            if os.path.exists(path):
+                try:
+                    os.unlink(path)
+                except:
+                    pass
+    
+    del waiting_for_reel_upload[user_id]
+    used, available, total = get_stato_account(account)
+    
+    await status_msg.edit_text(f"✅ <b>Reels loaded successfully for @{account}!</b>\n\n🎬 Added: {success_count}/{total_files}\n📊 Total in pool: {total}\n⏳ Available: {available}\n✅ Used: {used}", parse_mode="HTML")
+    await notificare_admin(context, f"🎬 You loaded {success_count} reels for @{account}", is_admin_action=True)
+
+# ======================
+# CALLBACK HANDLER
 # ======================
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
+    user_id = query.from_user.id
     
-    # Menú principal de admin
+    # BACK BUTTONS - Admin menu returns
     if data == "admin_back":
         await admin_menu(update, context)
-    elif data == "admin_upload":
-        await admin_upload_menu(update, context)
-    elif data == "admin_add_poster":
-        await admin_add_poster(update, context)
-    elif data == "admin_add_account":
-        await admin_add_account(update, context)
-    elif data == "admin_add_country":
-        await admin_add_country(update, context)
-    elif data == "admin_delete_account":
-        await admin_delete_account_menu(update, context)
-    elif data == "admin_delete_poster":
-        await admin_delete_poster_menu(update, context)
-    elif data == "admin_status":
-        await admin_status(update, context)
-    elif data == "admin_reset":
-        await admin_reset_menu(update, context)
-    elif data == "admin_panel":
+        return
+    elif data == "go_to_admin":
         await admin_menu(update, context)
+        return
     elif data == "use_as_user":
         await query.edit_message_text(
             "🎬 Use /menu to receive reels as a regular user.\n\n"
             "You can also type your poster name directly.",
             parse_mode="HTML"
         )
+        return
     elif data == "use_current_poster":
-        user_id = query.from_user.id
         if str(user_id) in user_posters:
             await show_accounts_menu(
                 update, context, 
@@ -944,8 +983,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         else:
             await query.edit_message_text("❌ No poster found. Use /menu to start over.")
+        return
     elif data == "change_poster":
-        user_id = query.from_user.id
         if str(user_id) in user_posters:
             del user_posters[str(user_id)]
             save_users_data()
@@ -955,61 +994,125 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
         context.user_data["waiting_for_poster"] = True
+        return
     
-    # Upload reels
-    elif data.startswith("admin_upload_country_"):
-        country_key = data.replace("admin_upload_country_", "")
+    # Admin menu options
+    elif data == "admin_upload":
+        await admin_upload_menu(update, context)
+        return
+    elif data == "admin_add_poster":
+        await admin_add_poster(update, context)
+        return
+    elif data == "admin_add_account":
+        await admin_add_account(update, context)
+        return
+    elif data == "admin_add_country":
+        await admin_add_country(update, context)
+        return
+    elif data == "admin_delete_account_start":
+        await admin_delete_account_start(update, context)
+        return
+    elif data == "admin_delete_poster_start":
+        await admin_delete_poster_start(update, context)
+        return
+    elif data == "admin_status":
+        await admin_status(update, context)
+        return
+    elif data == "admin_reset":
+        await admin_reset_menu(update, context)
+        return
+    
+    # Upload reels navigation
+    elif data.startswith("upload_country_"):
+        country_key = data.replace("upload_country_", "")
         await admin_upload_poster_menu(update, context, country_key)
-    elif data.startswith("admin_upload_poster_"):
+        return
+    elif data.startswith("upload_poster_"):
         parts = data.split("_")
-        if len(parts) >= 5:
-            await admin_upload_account_menu(update, context, parts[3], parts[4])
-    elif data.startswith("admin_upload_account_"):
+        if len(parts) >= 3:
+            country_key = parts[2]
+            poster_key = parts[3] if len(parts) > 3 else parts[2]
+            if len(parts) > 3:
+                await admin_upload_account_menu(update, context, parts[2], parts[3])
+            else:
+                await admin_upload_account_menu(update, context, parts[2], parts[2])
+        return
+    elif data.startswith("upload_account_"):
         parts = data.split("_")
-        if len(parts) >= 6:
-            await admin_start_upload(update, context, parts[5])
+        if len(parts) >= 4:
+            await admin_start_upload(update, context, parts[3])
+        return
+    elif data.startswith("upload_back_"):
+        parts = data.split("_")
+        if len(parts) >= 3:
+            await admin_upload_poster_menu(update, context, parts[2])
+        return
     
     # Add poster
     elif data.startswith("add_poster_country_"):
         country_key = data.replace("add_poster_country_", "")
         await admin_add_poster_country(update, context, country_key)
-    
-    # Add account
+        return
     elif data.startswith("add_account_country_"):
         country_key = data.replace("add_account_country_", "")
         await admin_add_account_poster(update, context, country_key)
+        return
     elif data.startswith("add_account_poster_"):
         parts = data.split("_")
-        if len(parts) >= 5:
+        if len(parts) >= 4:
             await admin_add_account_input(update, context, parts[3], parts[4])
+        return
     
     # Delete account
-    elif data.startswith("delete_account_"):
-        parts = data.split("_")
-        if len(parts) >= 5:
-            await admin_confirm_delete_account(update, context, parts[2], parts[3], parts[4])
-    elif data.startswith("confirm_delete_account_"):
-        parts = data.split("_")
-        if len(parts) >= 6:
-            await admin_execute_delete_account(update, context, parts[3], parts[4], parts[5])
-    
-    # Delete poster
-    elif data.startswith("delete_poster_"):
+    elif data.startswith("del_acc_country_"):
+        country_key = data.replace("del_acc_country_", "")
+        await admin_delete_account_poster(update, context, country_key)
+        return
+    elif data.startswith("del_acc_poster_"):
         parts = data.split("_")
         if len(parts) >= 4:
-            await admin_confirm_delete_poster(update, context, parts[2], parts[3])
-    elif data.startswith("confirm_delete_poster_"):
+            await admin_delete_account_confirm(update, context, parts[3], parts[4])
+        return
+    elif data.startswith("del_acc_confirm_"):
         parts = data.split("_")
         if len(parts) >= 5:
-            await admin_execute_delete_poster(update, context, parts[3], parts[4])
+            await admin_delete_account_execute(update, context, parts[3], parts[4], parts[5])
+        return
+    elif data.startswith("del_acc_final_"):
+        parts = data.split("_")
+        if len(parts) >= 5:
+            await admin_delete_account_final(update, context, parts[3], parts[4], parts[5])
+        return
+    elif data.startswith("del_acc_back_poster_"):
+        country_key = data.replace("del_acc_back_poster_", "")
+        await admin_delete_account_poster(update, context, country_key)
+        return
+    
+    # Delete poster
+    elif data.startswith("del_post_country_"):
+        country_key = data.replace("del_post_country_", "")
+        await admin_delete_poster_select(update, context, country_key)
+        return
+    elif data.startswith("del_post_confirm_"):
+        parts = data.split("_")
+        if len(parts) >= 4:
+            await admin_delete_poster_confirm(update, context, parts[3], parts[4])
+        return
+    elif data.startswith("del_post_final_"):
+        parts = data.split("_")
+        if len(parts) >= 4:
+            await admin_delete_poster_final(update, context, parts[3], parts[4])
+        return
     
     # Reset account
     elif data.startswith("admin_reset_account_"):
         account = data.replace("admin_reset_account_", "")
         await admin_reset_account(update, context, account)
+        return
     elif data.startswith("admin_confirm_reset_"):
         account = data.replace("admin_confirm_reset_", "")
         await admin_confirm_reset(update, context, account)
+        return
     
     # Selección de país para poster con múltiples países
     elif data.startswith("select_country_"):
@@ -1017,7 +1120,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if len(parts) >= 4:
             country_key = parts[2]
             poster_key = parts[3]
-            user_id = query.from_user.id
             pending = context.user_data.get("pending_poster", {})
             poster_name = pending.get("name", "")
             
@@ -1033,11 +1135,13 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 del context.user_data["pending_poster"]
             
             await show_accounts_menu(update, context, country_key, poster_key)
+        return
     
     # Menú de usuario - obtener reel
     elif data.startswith("get_reel_"):
         account = data.replace("get_reel_", "")
         await send_reel_to_user(update, context, account)
+        return
 
 # ======================
 # MAIN
@@ -1049,19 +1153,16 @@ def main():
     
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # Handlers de comandos
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("menu", menu_command))
     application.add_handler(CommandHandler("admin", admin_menu))
     application.add_handler(CommandHandler("done", done_upload))
     
-    # Handlers de mensajes
     application.add_handler(MessageHandler(filters.VIDEO & filters.User(ADMIN_USERS), receive_reel_upload))
     application.add_handler(MessageHandler(filters.Document.VIDEO & filters.User(ADMIN_USERS), receive_reel_upload))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.User(ADMIN_USERS), handle_admin_text))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.User(ADMIN_USERS), handle_poster_name))
     
-    # Handler de callbacks
     application.add_handler(CallbackQueryHandler(callback_handler))
     
     print("✅ Bot iniciado. Presiona Ctrl+C para detener.")
