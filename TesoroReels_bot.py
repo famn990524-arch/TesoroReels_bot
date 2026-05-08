@@ -385,30 +385,37 @@ async def show_accounts_menu(update: Update, context: ContextTypes.DEFAULT_TYPE,
     poster_data = reels_data.get(country_key, {}).get("posters", {}).get(poster_key, {})
     accounts = poster_data.get("accounts", [])
     
+    if not accounts:
+        message = f"❌ No accounts found for {poster_data['name']} in {reels_data[country_key]['name']}."
+        if update.callback_query:
+            await update.callback_query.edit_message_text(message)
+        else:
+            await update.message.reply_text(message)
+        return
+    
     keyboard = []
     for account in accounts:
-        _, disponibili, _ = get_stato_account(account)
-        status_icon = "🟢" if disponibili > 0 else "🔴"
-        keyboard.append([InlineKeyboardButton(f"{status_icon} {account}", callback_data=f"get_reel_{account}")])
+        _, disponibili, total = get_stato_account(account)
+        if disponibili > 0:
+            status_icon = "🟢"
+        elif total > 0 and disponibili == 0:
+            status_icon = "🔴"
+        else:
+            status_icon = "⚪"
+        keyboard.append([InlineKeyboardButton(f"{status_icon} {account} (📊 {disponibili}/{total})", callback_data=f"get_reel_{account}")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
+    message = (
+        f"🎬 <b>Select an account for {poster_data['name']} in {reels_data[country_key]['name']}:</b>\n\n"
+        f"🟢 = Reels available | 🔴 = All used | ⚪ = No reels\n\n"
+        f"Use /menu to go back to the main menu."
+    )
+    
     if update.callback_query:
-        await update.callback_query.edit_message_text(
-            f"🎬 <b>Select an account for {poster_data['name']} in {reels_data[country_key]['name']}:</b>\n\n"
-            f"🟢 = Reels available | 🔴 = No reels available\n\n"
-            f"Use /menu to go back to the main menu.",
-            reply_markup=reply_markup,
-            parse_mode="HTML"
-        )
+        await update.callback_query.edit_message_text(message, reply_markup=reply_markup, parse_mode="HTML")
     else:
-        await update.message.reply_text(
-            f"🎬 <b>Select an account for {poster_data['name']} in {reels_data[country_key]['name']}:</b>\n\n"
-            f"🟢 = Reels available | 🔴 = No reels available\n\n"
-            f"Use /menu to go back to the main menu.",
-            reply_markup=reply_markup,
-            parse_mode="HTML"
-        )
+        await update.message.reply_text(message, reply_markup=reply_markup, parse_mode="HTML")
 
 async def send_reel_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE, account: str):
     query = update.callback_query
@@ -427,10 +434,7 @@ async def send_reel_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     if available <= THRESHOLD_REELS and available > 0:
         await notificare_admin(
             context,
-            f"⚠️ <b>LOW REELS WARNING!</b>\n"
-            f"🎬 Account: @{account}\n"
-            f"📸 Reels available: {available}\n"
-            f"📌 Upload more reels!",
+            f"⚠️ <b>LOW REELS WARNING!</b>\n🎬 Account: @{account}\n📸 Reels available: {available}\n📌 Upload more reels!",
             is_admin_action=True
         )
     
@@ -448,9 +452,16 @@ async def send_reel_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     
     if reel_path and os.path.exists(reel_path):
         try:
-            await query.edit_message_text(f"🎬 Sending reel from @{account}...")
+            await query.edit_message_text(f"🎬 Enviando reel desde @{account}...")
+            
+            # Enviar como documento (archivo) para evitar compresión
             with open(reel_path, 'rb') as f:
-                await context.bot.send_video(chat_id=user_id, video=f, caption=f"🎬 Reel from @{account}")
+                await context.bot.send_document(
+                    chat_id=user_id, 
+                    document=f, 
+                    caption=f"🎬 Reel from @{account}",
+                    filename=os.path.basename(reel_path)
+                )
             
             marcare_reel_come_usato(account, reel_id)
             await notificare_admin(context, f"🎬 @{username} received a reel from @{account}")
@@ -537,27 +548,59 @@ async def admin_upload_account_menu(update: Update, context: ContextTypes.DEFAUL
     await query.answer()
     
     accounts = reels_data.get(country_key, {}).get("posters", {}).get(poster_key, {}).get("accounts", [])
-    keyboard = [[InlineKeyboardButton(account, callback_data=f"upload_account_{country_key}_{poster_key}_{account}")] for account in accounts]
+    
+    if not accounts:
+        await query.edit_message_text(f"❌ No accounts found for this poster. Add accounts first.")
+        return
+    
+    keyboard = []
+    for account in accounts:
+        used, available, total = get_stato_account(account)
+        status_icon = "🟢" if available > 0 else "🔴" if total > 0 else "⚪"
+        keyboard.append([InlineKeyboardButton(f"{status_icon} {account} (📊 {available}/{total})", callback_data=f"upload_account_{country_key}_{poster_key}_{account}")])
+    
     keyboard.append([InlineKeyboardButton("◀️ Back", callback_data=f"upload_back_{country_key}_{poster_key}")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(f"🎬 <b>Select account for {reels_data[country_key]['posters'][poster_key]['name']}:</b>", 
-                                  reply_markup=reply_markup, parse_mode="HTML")
+    await query.edit_message_text(
+        f"🎬 <b>Select account for {reels_data[country_key]['posters'][poster_key]['name']}</b>\n\n"
+        f"🟢 = Reels available | 🔴 = All used | ⚪ = No reels uploaded\n\n"
+        f"Select the account to upload reels:",
+        reply_markup=reply_markup,
+        parse_mode="HTML"
+    )
 
 async def admin_start_upload(update: Update, context: ContextTypes.DEFAULT_TYPE, account: str):
     query = update.callback_query
     user_id = query.from_user.id
     await query.answer()
     
+    # Limpiar sesiones anteriores
+    if user_id in waiting_for_reel_upload:
+        old_files = waiting_for_reel_upload[user_id].get("files", [])
+        for path in old_files:
+            if os.path.exists(path):
+                try:
+                    os.unlink(path)
+                except:
+                    pass
+    
     waiting_for_reel_upload[user_id] = {"account": account, "files": []}
-    await query.edit_message_text(f"🎬 <b>Uploading reels for @{account}</b>\n\nSend video files (.mp4, .mov) one or more at a time.\nWhen done, type <code>/done</code>\n\n⏳ Files received so far: 0", parse_mode="HTML")
+    
+    await query.edit_message_text(
+        f"🎬 <b>Uploading reels for account: @{account}</b>\n\n"
+        f"Send video files (.mp4, .mov) one or more at a time.\n"
+        f"<b>When done, type <code>/done</code></b>\n\n"
+        f"⏳ Files received so far: 0\n\n"
+        f"⚠️ Files will be stored under this account: @{account}",
+        parse_mode="HTML"
+    )
 
 # ======================
-# ADMIN - DELETE ACCOUNT (CON PAÍSES Y POSTERS)
+# ADMIN - DELETE ACCOUNT
 # ======================
 
 async def admin_delete_account_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Paso 1: Seleccionar país para eliminar cuenta"""
     query = update.callback_query
     await query.answer()
     
@@ -570,7 +613,6 @@ async def admin_delete_account_start(update: Update, context: ContextTypes.DEFAU
                                   reply_markup=reply_markup, parse_mode="HTML")
 
 async def admin_delete_account_poster(update: Update, context: ContextTypes.DEFAULT_TYPE, country_key: str):
-    """Paso 2: Seleccionar poster para eliminar cuenta"""
     query = update.callback_query
     await query.answer()
     
@@ -584,7 +626,6 @@ async def admin_delete_account_poster(update: Update, context: ContextTypes.DEFA
                                   reply_markup=reply_markup, parse_mode="HTML")
 
 async def admin_delete_account_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE, country_key: str, poster_key: str):
-    """Paso 3: Seleccionar cuenta específica para eliminar"""
     query = update.callback_query
     await query.answer()
     
@@ -600,7 +641,6 @@ async def admin_delete_account_confirm(update: Update, context: ContextTypes.DEF
                                   reply_markup=reply_markup, parse_mode="HTML")
 
 async def admin_delete_account_execute(update: Update, context: ContextTypes.DEFAULT_TYPE, country_key: str, poster_key: str, account: str):
-    """Paso 4: Confirmar y eliminar la cuenta"""
     query = update.callback_query
     await query.answer()
     
@@ -613,7 +653,6 @@ async def admin_delete_account_execute(update: Update, context: ContextTypes.DEF
                                   reply_markup=reply_markup, parse_mode="HTML")
 
 async def admin_delete_account_final(update: Update, context: ContextTypes.DEFAULT_TYPE, country_key: str, poster_key: str, account: str):
-    """Ejecutar eliminación de la cuenta"""
     query = update.callback_query
     await query.answer()
     
@@ -628,7 +667,6 @@ async def admin_delete_account_final(update: Update, context: ContextTypes.DEFAU
 # ======================
 
 async def admin_delete_poster_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Paso 1: Seleccionar país para eliminar poster"""
     query = update.callback_query
     await query.answer()
     
@@ -641,7 +679,6 @@ async def admin_delete_poster_start(update: Update, context: ContextTypes.DEFAUL
                                   reply_markup=reply_markup, parse_mode="HTML")
 
 async def admin_delete_poster_select(update: Update, context: ContextTypes.DEFAULT_TYPE, country_key: str):
-    """Paso 2: Seleccionar poster para eliminar"""
     query = update.callback_query
     await query.answer()
     
@@ -657,7 +694,6 @@ async def admin_delete_poster_select(update: Update, context: ContextTypes.DEFAU
                                   reply_markup=reply_markup, parse_mode="HTML")
 
 async def admin_delete_poster_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE, country_key: str, poster_key: str):
-    """Paso 3: Confirmar eliminación del poster"""
     query = update.callback_query
     await query.answer()
     
@@ -673,7 +709,6 @@ async def admin_delete_poster_confirm(update: Update, context: ContextTypes.DEFA
                                   reply_markup=reply_markup, parse_mode="HTML")
 
 async def admin_delete_poster_final(update: Update, context: ContextTypes.DEFAULT_TYPE, country_key: str, poster_key: str):
-    """Ejecutar eliminación del poster"""
     query = update.callback_query
     await query.answer()
     
@@ -894,7 +929,9 @@ async def receive_reel_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
     if update.message.video:
         video = update.message.video
         file = await context.bot.get_file(video.file_id)
-        ext = ".mp4" if not video.file_name else os.path.splitext(video.file_name)[1]
+        ext = ".mp4"
+        if video.file_name:
+            ext = os.path.splitext(video.file_name)[1]
         temp_path = f"reel_temp_{int(time.time())}_{random.randint(1000,9999)}{ext}"
         await file.download_to_drive(temp_path)
     
@@ -912,7 +949,12 @@ async def receive_reel_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
     if temp_path:
         waiting_for_reel_upload[user_id]["files"].append(temp_path)
         total = len(waiting_for_reel_upload[user_id]["files"])
-        await update.message.reply_text(f"📦 Received 1 reel for @{account}\n📊 Total so far: {total}\n\nSend more or type <code>/done</code>", parse_mode="HTML")
+        await update.message.reply_text(
+            f"✅ Received 1 reel for account: @{account}\n"
+            f"📊 Total so far: {total}\n\n"
+            f"Send more or type <code>/done</code>",
+            parse_mode="HTML"
+        )
 
 async def done_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -1165,8 +1207,18 @@ def main():
     
     application.add_handler(CallbackQueryHandler(callback_handler))
     
-    print("✅ Bot iniciado. Presiona Ctrl+C para detener.")
+    print("=" * 60)
+    print("✅ BOT DE REELS CORREGIDO")
+    print("=" * 60)
+    print(f"🤖 Bot online con token de entorno")
     print(f"👑 Admins: {', '.join(ADMIN_USERNAMES.values())}")
+    print("=" * 60)
+    print("📌 CAMBIOS REALIZADOS:")
+    print("  • Reels se guardan por cuenta (account)")
+    print("  • Videos se envían como archivos (send_document)")
+    print("  • Mejor feedback visual con iconos")
+    print("=" * 60)
+    
     application.run_polling()
 
 if __name__ == "__main__":
