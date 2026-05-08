@@ -557,13 +557,14 @@ async def admin_upload_account_menu(update: Update, context: ContextTypes.DEFAUL
     for account in accounts:
         used, available, total = get_stato_account(account)
         status_icon = "🟢" if available > 0 else "🔴" if total > 0 else "⚪"
-        keyboard.append([InlineKeyboardButton(f"{status_icon} {account} (📊 {available}/{total})", callback_data=f"upload_account_{country_key}_{poster_key}_{account}")])
+        # IMPORTANTE: El callback_data contiene la CUENTA (account)
+        keyboard.append([InlineKeyboardButton(f"{status_icon} {account} (📊 {available}/{total})", callback_data=f"upload_account_{account}")])
     
     keyboard.append([InlineKeyboardButton("◀️ Back", callback_data=f"upload_back_{country_key}_{poster_key}")])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(
-        f"🎬 <b>Select account for {reels_data[country_key]['posters'][poster_key]['name']}</b>\n\n"
+        f"🎬 <b>Select account to upload reels for {reels_data[country_key]['posters'][poster_key]['name']}</b>\n\n"
         f"🟢 = Reels available | 🔴 = All used | ⚪ = No reels uploaded\n\n"
         f"Select the account to upload reels:",
         reply_markup=reply_markup,
@@ -1071,23 +1072,25 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     elif data.startswith("upload_poster_"):
         parts = data.split("_")
-        if len(parts) >= 3:
+        if len(parts) >= 4:
             country_key = parts[2]
-            poster_key = parts[3] if len(parts) > 3 else parts[2]
-            if len(parts) > 3:
-                await admin_upload_account_menu(update, context, parts[2], parts[3])
-            else:
-                await admin_upload_account_menu(update, context, parts[2], parts[2])
+            poster_key = parts[3]
+            await admin_upload_account_menu(update, context, country_key, poster_key)
         return
     elif data.startswith("upload_account_"):
-        parts = data.split("_")
-        if len(parts) >= 4:
-            await admin_start_upload(update, context, parts[3])
+        # El formato es "upload_account_{account}"
+        account = data.replace("upload_account_", "")
+        await admin_start_upload(update, context, account)
         return
     elif data.startswith("upload_back_"):
         parts = data.split("_")
         if len(parts) >= 3:
-            await admin_upload_poster_menu(update, context, parts[2])
+            country_key = parts[2]
+            poster_key = parts[3] if len(parts) > 3 else None
+            if poster_key:
+                await admin_upload_poster_menu(update, context, country_key)
+            else:
+                await admin_upload_menu(update, context)
         return
     
     # Add poster
@@ -1101,8 +1104,10 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     elif data.startswith("add_account_poster_"):
         parts = data.split("_")
-        if len(parts) >= 4:
-            await admin_add_account_input(update, context, parts[3], parts[4])
+        if len(parts) >= 5:
+            country_key = parts[3]
+            poster_key = parts[4]
+            await admin_add_account_input(update, context, country_key, poster_key)
         return
     
     # Delete account
@@ -1112,18 +1117,26 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     elif data.startswith("del_acc_poster_"):
         parts = data.split("_")
-        if len(parts) >= 4:
-            await admin_delete_account_confirm(update, context, parts[3], parts[4])
+        if len(parts) >= 5:
+            country_key = parts[3]
+            poster_key = parts[4]
+            await admin_delete_account_confirm(update, context, country_key, poster_key)
         return
     elif data.startswith("del_acc_confirm_"):
         parts = data.split("_")
-        if len(parts) >= 5:
-            await admin_delete_account_execute(update, context, parts[3], parts[4], parts[5])
+        if len(parts) >= 6:
+            country_key = parts[3]
+            poster_key = parts[4]
+            account = parts[5]
+            await admin_delete_account_execute(update, context, country_key, poster_key, account)
         return
     elif data.startswith("del_acc_final_"):
         parts = data.split("_")
-        if len(parts) >= 5:
-            await admin_delete_account_final(update, context, parts[3], parts[4], parts[5])
+        if len(parts) >= 6:
+            country_key = parts[3]
+            poster_key = parts[4]
+            account = parts[5]
+            await admin_delete_account_final(update, context, country_key, poster_key, account)
         return
     elif data.startswith("del_acc_back_poster_"):
         country_key = data.replace("del_acc_back_poster_", "")
@@ -1137,13 +1150,17 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     elif data.startswith("del_post_confirm_"):
         parts = data.split("_")
-        if len(parts) >= 4:
-            await admin_delete_poster_confirm(update, context, parts[3], parts[4])
+        if len(parts) >= 5:
+            country_key = parts[3]
+            poster_key = parts[4]
+            await admin_delete_poster_confirm(update, context, country_key, poster_key)
         return
     elif data.startswith("del_post_final_"):
         parts = data.split("_")
-        if len(parts) >= 4:
-            await admin_delete_poster_final(update, context, parts[3], parts[4])
+        if len(parts) >= 5:
+            country_key = parts[3]
+            poster_key = parts[4]
+            await admin_delete_poster_final(update, context, country_key, poster_key)
         return
     
     # Reset account
