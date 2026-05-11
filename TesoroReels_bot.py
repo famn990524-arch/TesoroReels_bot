@@ -18,8 +18,13 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("❌ No se encontró la variable de entorno BOT_TOKEN. Configúrala en Railway.")
 
-ADMIN_USERS = [7097140504, 6094647471, 5363312268]
-ADMIN_USERNAMES = {7097140504: "famn25", 6094647471: "ccgonzalezb13", 5363312268: "Drose1493"}
+ADMIN_USERS = [7097140504, 6094647471, 5363312268, 2058314933]
+ADMIN_USERNAMES = {
+    7097140504: "famn25", 
+    6094647471: "ccgonzalezb13", 
+    5363312268: "Drose1493",
+    2058314933: "aytaytjini"
+}
 
 DATA_FOLDER = "reels_bot_data"
 REELS_FOLDER = os.path.join(DATA_FOLDER, "reels")
